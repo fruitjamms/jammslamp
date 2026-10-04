@@ -1,0 +1,1164 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JAMMS Lamp</title>
+<meta name="description" content="Technical drawing set and interactive 3D viewer for the JAMMS Lamp: a cast concrete base topped with a bevelled light profile.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@300..600&display=swap">
+<style>
+/* Layout: a drawing sheet. Title block on top, the live viewer as the main field,
+   orthographic sheets and the spec schedule in a side column, controls floating on the viewer. */
+:root {
+  /* Inputs (quiet-depth: ink tints every shadow, accent drives selection) */
+  --bg: #ffffff;
+  --ink: #171014;
+  --accent: #ff29a7;
+  --accent-line: #ff29a7;           /* accent adjusted for legible strokes on the ground */
+
+  /* Derived */
+  --ink-2: color-mix(in srgb, var(--ink) 64%, var(--bg));
+  --ink-3: color-mix(in srgb, var(--ink) 46%, var(--bg));
+  --ink-4: color-mix(in srgb, var(--ink) 28%, var(--bg));
+  --line: color-mix(in srgb, var(--ink) 18%, var(--bg));
+  --line-soft: color-mix(in srgb, var(--ink) 9%, var(--bg));
+  --grid: color-mix(in srgb, var(--ink) 4%, transparent);
+  --grid-major: color-mix(in srgb, var(--ink) 7.5%, transparent);
+  --card: #ffffff;
+  --well: color-mix(in srgb, var(--ink) 4%, var(--bg));
+  --tint: color-mix(in srgb, var(--accent) 15%, transparent);
+
+  --ring: inset 0 0 0 0.5px color-mix(in srgb, var(--ink) 14%, transparent);
+  --lit: inset 0 1px 0 rgb(255 255 255 / 0.9);
+  --shadow-1: 0 1px 1.5px color-mix(in srgb, var(--ink) 4.5%, transparent);
+  --shadow-3: 0 2px 6px color-mix(in srgb, var(--ink) 6%, transparent),
+              0 12px 32px color-mix(in srgb, var(--ink) 7%, transparent);
+  --sunk: inset 0 1px 2px color-mix(in srgb, var(--ink) 5%, transparent),
+          inset 0 0 0 0.5px color-mix(in srgb, var(--ink) 9%, transparent);
+  --halo: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+
+  /* Type */
+  --display: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  --radius: 6px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+  --theme-dur: 900ms;
+}
+:root.is-dark {
+  --bg: #000000; --ink: #f1edef; --card: #0c0b0c;
+  --well: color-mix(in srgb, var(--ink) 5%, var(--bg));
+  --lit: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --ring: inset 0 0 0 0.5px color-mix(in srgb, var(--ink) 18%, transparent);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.6);
+  --shadow-3: 0 2px 6px rgb(0 0 0 / 0.5), 0 12px 32px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { background: var(--bg); margin: 0; transition: background-color var(--theme-dur) var(--ease-io); }
+/* While the theme changes, every colour on the page eases over the same 900ms curve as the 3D scene. */
+:root.theming, :root.theming *, :root.theming *::before, :root.theming *::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow, outline-color !important;
+  transition-duration: var(--theme-dur) !important;
+  transition-timing-function: var(--ease-io), var(--ease-io), steps(2, jump-none), var(--ease-io), var(--ease-io), var(--ease-io), var(--ease-io) !important;
+}
+/* Text swaps colour in one step when the ground is halfway, so it never fades out against it. */
+:root.theming text {
+  transition-timing-function: var(--ease-io), var(--ease-io), steps(2, jump-none), steps(2, jump-none), var(--ease-io), var(--ease-io), var(--ease-io) !important;
+}
+:root.theming .knob { transition: transform 240ms var(--ease-out), background-color var(--theme-dur) var(--ease-io) !important; }
+.viewer.gl .grid-overlay { display: none; }
+body {
+  color: var(--ink);
+  font: 12px/1.5 var(--mono);
+  -webkit-font-smoothing: antialiased;
+  padding-inline: clamp(16px, 2.4vw, 32px);
+  padding-block: 20px 28px;
+  transition: background-color var(--theme-dur) var(--ease-io), color var(--theme-dur) var(--ease-io);
+}
+.wrap { max-width: 1480px; margin-inline: auto; display: grid; gap: 14px; }
+
+/* ── Title block ─────────────────────────────── */
+.titleblock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border: 1px solid var(--line);
+  transition: border-color var(--theme-dur) var(--ease-io);
+}
+.tb-name { padding: 14px 18px; display: flex; align-items: center; min-width: 0; }
+.tb-name h1 {
+  margin: 0; font-family: var(--display); font-weight: 600;
+  font-size: clamp(28px, 3.8vw, 46px); letter-spacing: -0.04em; line-height: 1;
+}
+.tb-meta { display: grid; grid-template-columns: repeat(3, auto); border-left: 1px solid var(--line); }
+.tb-meta div { padding: 7px 14px; border-left: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); display: grid; gap: 1px; }
+.tb-meta div:nth-child(3n+1) { border-left: 0; }
+.tb-meta div:nth-last-child(-n+3) { border-bottom: 0; }
+.k { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.v { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── Sheet layout ───────────────────────────── */
+.sheet { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+
+/* Viewer frame with drawing zones */
+.viewer-frame {
+  position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr) 18px; grid-template-rows: 18px auto 18px;
+  border: 1px solid var(--line);
+  transition: border-color var(--theme-dur) var(--ease-io);
+}
+.zones { display: flex; color: var(--ink-4); font-size: 9px; }
+.zones span { flex: 1; display: grid; place-items: center; border-left: 1px solid var(--line-soft); }
+.zones span:first-child { border-left: 0; }
+.zones.h { grid-column: 2; }
+.zones.v { flex-direction: column; }
+.zones.v span { border-left: 0; border-top: 1px solid var(--line-soft); }
+.zones.v span:first-child { border-top: 0; }
+.zones.top { grid-row: 1; } .zones.bottom { grid-row: 3; }
+.zones.left { grid-column: 1; grid-row: 2; } .zones.right { grid-column: 3; grid-row: 2; }
+
+.viewer {
+  grid-column: 2; grid-row: 2; position: relative; overflow: hidden;
+  height: clamp(480px, 74vh, 860px);
+  border: 1px solid var(--line);
+  touch-action: pan-y; cursor: grab;
+  transition: border-color var(--theme-dur) var(--ease-io);
+}
+.viewer.dragging { cursor: grabbing; }
+.viewer canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.grid-overlay {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+  background-position: -1px -1px;
+}
+.annot { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.annot line, .annot path { stroke: var(--ink-3); stroke-width: 0.75; fill: none; }
+.annot .ext { stroke: var(--ink-4); }
+.annot circle { fill: var(--bg); stroke: var(--ink-2); stroke-width: 0.75; }
+.annot text { fill: var(--ink-2); font: 10px var(--mono); letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
+.annot .lbl { fill: var(--ink); }
+.annot g { transition: opacity 200ms linear; }
+
+.hud { position: absolute; display: grid; gap: 2px; font-size: 10px; letter-spacing: 0.08em; color: var(--ink-3); pointer-events: none; font-variant-numeric: tabular-nums; }
+.hud b { color: var(--ink); font-weight: 500; }
+.hud.tl { top: 12px; left: 14px; }
+.hud.tr { top: 12px; right: 14px; text-align: right; }
+.reticle { position: absolute; width: 22px; height: 22px; pointer-events: none; }
+.reticle::before, .reticle::after { content: ""; position: absolute; background: var(--ink-4); }
+.reticle::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+.reticle::after { top: 50%; left: 0; right: 0; height: 1px; }
+.reticle.a { left: 8px; bottom: 8px; } .reticle.b { right: 8px; bottom: 8px; }
+.gl-error { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--ink-2); }
+
+/* ── Floating control panel (quiet-depth level 3) ─ */
+.panel {
+  position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%);
+  display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center;
+  max-width: calc(100% - 32px); width: max-content;
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--ring), var(--lit), var(--shadow-3);
+  cursor: default; touch-action: manipulation;
+  transition: background-color var(--theme-dur) var(--ease-io), box-shadow var(--theme-dur) var(--ease-io);
+}
+.group { display: grid; gap: 5px; padding: 8px 12px 10px; }
+.group + .group { box-shadow: inset 0.5px 0 0 var(--line); }
+.group > .k { padding-left: 2px; }
+.seg {
+  display: flex; gap: 2px; padding: 2px; border-radius: 5px;
+  background: var(--well); box-shadow: var(--sunk);
+  transition: background-color var(--theme-dur) var(--ease-io);
+}
+.seg button, .swatch, .switch {
+  font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.seg button {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 9px; border-radius: 3.5px;
+  color: var(--ink-3); font-size: 11px; letter-spacing: 0.02em; white-space: nowrap;
+  transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out), box-shadow 140ms var(--ease-out), transform 140ms var(--ease-out);
+}
+.seg button svg { width: 13px; height: 13px; fill: currentColor; }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1), var(--ring); }
+.seg button[aria-pressed="true"] svg { fill: var(--accent-line); }
+.seg button:active { transform: scale(0.96); }
+.swatches { display: flex; gap: 6px; align-items: center; height: 30px; padding: 0 2px; }
+.swatch {
+  width: 20px; height: 20px; border-radius: 50%; background: var(--c);
+  box-shadow: inset 0 0.5px 0 rgb(255 255 255 / 0.4), inset 0 0 0 0.5px rgb(0 0 0 / 0.12), var(--shadow-1);
+  transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+}
+.swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--ink); transform: scale(1.05); }
+.swatch:active { transform: scale(0.92); }
+.switch { display: inline-flex; align-items: center; gap: 8px; height: 30px; font-size: 11px; color: var(--ink-2); padding: 0 2px; }
+.switch .track {
+  width: 34px; height: 18px; border-radius: 9px; position: relative;
+  background: var(--well); box-shadow: var(--sunk);
+  transition: background-color 240ms var(--ease-out);
+}
+.switch .knob {
+  position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--card); box-shadow: var(--shadow-1), var(--ring);
+  transition: transform 240ms var(--ease-out), background-color 240ms var(--ease-out);
+}
+.switch[aria-checked="true"] .track { background: var(--accent); }
+.switch[aria-checked="true"] .knob { transform: translateX(16px); background: #fff; }
+button:focus-visible { outline: none; box-shadow: var(--ring), var(--shadow-1), var(--halo); }
+.swatch:focus-visible { box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--ink), var(--halo); }
+@media (hover: hover) {
+  .seg button:not([aria-pressed="true"]):hover { color: var(--ink); }
+  .swatch:not([aria-checked="true"]):hover { transform: scale(1.12); }
+}
+
+/* ── Side column: sheets and schedule ─────────── */
+.side { display: grid; gap: 14px; min-width: 0; }
+.drawing { border: 1px solid var(--line); transition: border-color var(--theme-dur) var(--ease-io); }
+.drawing summary {
+  display: flex; align-items: center; gap: 10px; list-style: none; cursor: pointer;
+  padding: 8px 12px; border-bottom: 1px solid transparent; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.drawing summary::-webkit-details-marker { display: none; }
+.drawing[open] summary { border-bottom-color: var(--line-soft); }
+.drawing summary .k { margin-left: auto; }
+.drawing summary:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--accent-line); }
+.chev { width: 10px; height: 10px; flex: none; fill: none; stroke: var(--ink-3); stroke-width: 1.2; transform: rotate(-90deg); transition: transform 240ms var(--ease-out); }
+.drawing[open] .chev { transform: none; }
+@media (hover: hover) { .drawing summary:hover .chev { stroke: var(--ink); } }
+:root { interpolate-size: allow-keywords; }
+.drawing::details-content { block-size: 0; overflow: hidden; transition: block-size 320ms var(--ease-out), content-visibility 320ms allow-discrete; }
+.drawing[open]::details-content { block-size: auto; }
+.drawing summary h2 { margin: 0; font: 600 11px var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.drawing svg.ortho { display: block; width: 100%; height: auto; max-width: 100%; }
+.ortho * { vector-effect: non-scaling-stroke; }
+.ortho .cl { stroke: var(--ink-4); stroke-width: 0.6; stroke-dasharray: 14 3 2 3; fill: none; }
+.ortho .mod { stroke: var(--line); stroke-width: 0.6; stroke-dasharray: 2 3; fill: none; }
+.ortho .prof { stroke: var(--accent-line); stroke-width: 1.1; fill: var(--fillc, none); transition: fill 400ms var(--ease-out), stroke 450ms var(--ease-out); }
+.ortho .edge { stroke: var(--ink); stroke-width: 1; fill: none; }
+.ortho .lo { stroke: var(--accent-line); stroke-width: 0.5; opacity: 0.7; fill: none; }
+.ortho .dimln { stroke: var(--ink-3); stroke-width: 0.6; fill: none; }
+.ortho .tick { stroke: var(--ink-2); stroke-width: 1; }
+.ortho text { fill: var(--ink-2); font: 8.4px var(--mono); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.ortho .conc-dot { fill: var(--ink-3); }
+.ortho .conc-tri { fill: none; stroke: var(--ink-3); stroke-width: 0.5; }
+.ortho .base { stroke: var(--ink); stroke-width: 1; }
+.ortho .ground { stroke: var(--ink-2); stroke-width: 1; }
+.ortho .hatch { stroke: var(--ink-4); stroke-width: 0.6; }
+
+.schedule { width: 100%; border-collapse: collapse; font: inherit; font-variant-numeric: tabular-nums; }
+.schedule th, .schedule td { text-align: left; padding: 6px 12px; border-top: 1px solid var(--line-soft); vertical-align: top; font-weight: 400; }
+.schedule tr:first-child th, .schedule tr:first-child td { border-top: 0; }
+.schedule th { width: 42%; }
+.schedule td { color: var(--ink); }
+.chip { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: 0; box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.15); }
+.bev { display: flex; align-items: center; gap: 10px; }
+.bev output { min-width: 5ch; text-align: right; font-variant-numeric: tabular-nums; }
+.bev input[type="range"] {
+  -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 18px; margin: 0;
+  background: transparent; cursor: pointer;
+}
+.bev input[type="range"]::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--pct, 50%), var(--well) var(--pct, 50%)); box-shadow: var(--sunk); }
+.bev input[type="range"]::-moz-range-track { height: 5px; border-radius: 3px; background: var(--well); box-shadow: var(--sunk); }
+.bev input[type="range"]::-moz-range-progress { height: 5px; border-radius: 3px; background: var(--accent); }
+.bev input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; margin-top: -4.5px; border-radius: 50%;
+  background: var(--card); box-shadow: var(--shadow-1), var(--ring), inset 0 0 0 3.5px var(--accent);
+  transition: transform 140ms var(--ease-out);
+}
+.bev input[type="range"]::-moz-range-thumb {
+  width: 14px; height: 14px; border: 0; border-radius: 50%;
+  background: var(--card); box-shadow: var(--shadow-1), var(--ring), inset 0 0 0 3.5px var(--accent);
+}
+.bev input[type="range"]:active::-webkit-slider-thumb { transform: scale(0.94); }
+.bev input[type="range"]:focus-visible { outline: none; }
+.bev input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: var(--shadow-1), var(--ring), inset 0 0 0 3.5px var(--accent), var(--halo); }
+.note { padding: 8px 12px 10px; border-top: 1px solid var(--line-soft); color: var(--ink-3); font-size: 10.5px; }
+
+footer.keys { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-3); font-size: 10.5px; border-top: 1px solid var(--line); padding-top: 10px; }
+kbd { font: inherit; color: var(--ink); padding: 0 5px; border-radius: 3px; background: var(--well); box-shadow: var(--sunk); }
+
+/* ── Responsive ─────────────────────────────── */
+@media (max-width: 1100px) {
+  .sheet { grid-template-columns: minmax(0, 1fr); }
+  .side { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .side .drawing.spec { grid-column: 1 / -1; }
+}
+@media (max-width: 860px) {
+  .titleblock { grid-template-columns: minmax(0, 1fr); }
+  .tb-meta { border-left: 0; border-top: 1px solid var(--line); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1040px) {
+  .viewer-frame { grid-template-rows: 18px auto 18px auto; }
+  .panel {
+    position: static; transform: none; width: auto; max-width: none;
+    grid-column: 1 / -1; grid-row: 4; margin: 0; border-radius: 0;
+    justify-content: flex-start; box-shadow: inset 0 0.5px 0 var(--line);
+  }
+}
+@media (max-width: 760px) {
+  .viewer-frame { grid-template-columns: 0 minmax(0, 1fr) 0; grid-template-rows: 0 auto 0 auto; border: 0; }
+  .zones { display: none; }
+  .viewer { height: min(78vw + 120px, 560px); }
+  .panel { grid-column: 2; margin-top: 10px; border-radius: var(--radius); box-shadow: var(--ring), var(--lit), var(--shadow-1); }
+  .group { padding: 8px 10px 10px; }
+  .hud { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --theme-dur: 1ms; }
+  * { transition-duration: 1ms !important; }
+}
+</style>
+
+<div class="wrap">
+  <header class="titleblock">
+    <div class="tb-name">
+      <h1>jamms lamp</h1>
+    </div>
+    <div class="tb-meta" aria-label="Drawing details">
+      <div><span class="k">Drawing</span><span class="v" id="tb-dwg">JMS-01-S1</span></div>
+      <div><span class="k">Scale</span><span class="v">1 : 2</span></div>
+      <div><span class="k">Units</span><span class="v">mm</span></div>
+      <div><span class="k">Sheet</span><span class="v" id="tb-sheet">1 / 3</span></div>
+      <div><span class="k">Rev</span><span class="v">A</span></div>
+      <div><span class="k">Date</span><span class="v">2026-10-04</span></div>
+    </div>
+  </header>
+
+  <main class="sheet">
+    <section class="viewer-frame" aria-label="3D viewer">
+      <div class="zones h top"><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span></div>
+      <div class="zones v left"><span>1</span><span>2</span><span>3</span><span>4</span></div>
+      <div class="viewer" id="viewer">
+        <div class="grid-overlay"></div>
+        <svg class="annot" id="annot" aria-hidden="true">
+          <g id="dimW"><line class="ext"/><line class="ext"/><line/><line/><line/><text text-anchor="middle"></text></g>
+          <g id="dimH"><line class="ext"/><line class="ext"/><line/><line/><line/><text text-anchor="middle"></text></g>
+          <g id="callA"><path/><circle r="2.5"/><text class="lbl"></text></g>
+          <g id="callB"><path/><circle r="2.5"/><text class="lbl"></text></g>
+        </svg>
+        <div class="hud tl">
+          <span><b id="hud-view">VIEW 1 · UPRIGHT</b></span>
+          <span id="hud-cam">AZ 34.0° · EL 22.0°</span>
+        </div>
+        <div class="hud tr">
+          <span><b id="hud-shape">PROFILE 01 · PINK</b></span>
+          <span id="hud-fps">IDLE</span>
+        </div>
+        <div class="reticle a"></div><div class="reticle b"></div>
+      </div>
+      <div class="zones v right"><span>1</span><span>2</span><span>3</span><span>4</span></div>
+      <div class="zones h bottom"><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span></div>
+
+      <div class="panel" id="panel" role="toolbar" aria-label="Lamp controls">
+        <div class="group">
+          <span class="k" id="lbl-shape">Profile</span>
+          <div class="seg" role="group" aria-labelledby="lbl-shape" id="seg-shape"></div>
+        </div>
+        <div class="group">
+          <span class="k" id="lbl-view">View</span>
+          <div class="seg" role="group" aria-labelledby="lbl-view">
+            <button id="view-1" type="button" aria-pressed="true">1 · Upright</button>
+            <button id="view-2" type="button" aria-pressed="false">2 · Frontal</button>
+          </div>
+        </div>
+        <div class="group">
+          <span class="k" id="lbl-render">Render</span>
+          <div class="seg" role="group" aria-labelledby="lbl-render">
+            <button id="mode-hair" type="button" aria-pressed="false">Hairline</button>
+            <button id="mode-solid" type="button" aria-pressed="true">Solid</button>
+          </div>
+        </div>
+        <div class="group">
+          <span class="k" id="lbl-color">Light colour</span>
+          <div class="swatches" role="radiogroup" aria-labelledby="lbl-color" id="swatches"></div>
+        </div>
+        <div class="group">
+          <span class="k">Dark</span>
+          <button class="switch" id="dark" type="button" role="switch" aria-checked="false">
+            <span class="track"><span class="knob"></span></span><span id="dark-lbl">Lamp off</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <details class="drawing" id="panel-plan" open>
+        <summary><h2>Plan of profile</h2><span class="k" id="plan-k">01 · open cross</span><svg class="chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 3.75 5 6.25 7.5 3.75"/></svg></summary>
+        <svg class="ortho" id="plan" viewBox="-48 -44 312 304" role="img" aria-label="Plan of the light profile with dimensions"></svg>
+      </details>
+      <details class="drawing" id="panel-elev" open>
+        <summary><h2>Front elevation</h2><span class="k">Base + luminaire</span><svg class="chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 3.75 5 6.25 7.5 3.75"/></svg></summary>
+        <svg class="ortho" id="elev" viewBox="-34 -40 318 230" role="img" aria-label="Front elevation of the lamp with dimensions"></svg>
+      </details>
+      <details class="drawing spec" id="panel-spec" open>
+        <summary><h2>Schedule</h2><span class="k">Nominal</span><svg class="chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 3.75 5 6.25 7.5 3.75"/></svg></summary>
+        <table class="schedule"><tbody id="spec"></tbody></table>
+        <div class="note">The profile is the supplied outline scaled to 59.8% (101.6 / 170), keeping its earlier proportions to the base. Slab depth, bevel and mass are nominal and set in the script's <code>DIM</code> block.</div>
+      </details>
+    </aside>
+  </main>
+
+  <footer class="keys">
+    <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> profile</span>
+    <span><kbd>V</kbd> view</span>
+    <span><kbd>F</kbd> hairline / solid</span>
+    <span><kbd>C</kbd> next colour</span>
+    <span><kbd>D</kbd> dark</span>
+    <span>drag to turn · double-click to square up</span>
+  </footer>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ── Data ─────────────────────────────────────────────────────────── */
+const D1 = "M101.092 72.3726C92.6676 72.3726 85.775 75.0531 80.414 80.414C75.0531 85.775 72.3726 92.6676 72.3726 101.092V114.877C72.3726 123.301 75.0531 130.194 80.414 135.555C85.775 140.916 92.6676 143.596 101.092 143.596H114.877C123.301 143.596 130.194 140.916 135.555 135.555C140.916 130.194 143.596 123.301 143.596 114.877V101.092C143.596 92.6676 140.916 85.775 135.555 80.414C130.194 75.0531 123.301 72.3726 114.877 72.3726H101.092ZM101.092 215.969C92.6676 215.969 85.775 213.289 80.414 207.928C75.0531 201.801 72.3726 194.908 72.3726 187.25V173.465C72.3726 165.04 69.3092 158.148 63.1824 152.787C57.8215 146.66 51.3118 143.596 43.6533 143.596H28.7193C20.295 143.596 13.4023 140.916 8.0414 135.555C2.68047 130.194 0 123.301 0 114.877V101.092C0 92.6676 2.68047 85.775 8.0414 80.414C13.4023 75.0531 20.295 72.3726 28.7193 72.3726H43.6533C51.3118 72.3726 57.8215 69.6922 63.1824 64.3312C69.3092 58.2045 72.3726 51.3118 72.3726 43.6533V28.7193C72.3726 20.295 75.0531 13.4024 80.414 8.04143C85.775 2.68048 92.6676 0 101.092 0H114.877C123.301 0 130.194 2.68048 135.555 8.04143C140.916 13.4024 143.596 20.295 143.596 28.7193V43.6533C143.596 51.3118 146.277 58.2045 151.638 64.3312C156.999 69.6922 163.891 72.3726 172.316 72.3726H187.25C194.908 72.3726 201.418 75.0531 206.779 80.414C212.906 85.775 215.969 92.6676 215.969 101.092V114.877C215.969 123.301 212.906 130.194 206.779 135.555C201.418 140.916 194.908 143.596 187.25 143.596H172.316C163.891 143.596 156.999 146.66 151.638 152.787C146.277 158.148 143.596 165.04 143.596 173.465V187.25C143.596 194.908 140.916 201.801 135.555 207.928C130.194 213.289 123.301 215.969 114.877 215.969H101.092Z";
+const D2 = "M101.092 215.969C92.6676 215.969 85.7749 213.289 80.414 207.928C75.0531 201.801 72.3726 194.908 72.3726 187.25V173.465C72.3726 165.04 69.3092 158.148 63.1824 152.787C57.8215 146.66 51.3118 143.596 43.6533 143.596H28.7193C20.295 143.596 13.4023 140.916 8.0414 135.555C2.68047 130.194 0 123.301 0 114.877V101.092C0 92.6676 2.68047 85.775 8.0414 80.414C13.4023 75.0531 20.295 72.3726 28.7193 72.3726H43.6533C51.3118 72.3726 57.8215 69.6922 63.1824 64.3312C69.3092 58.2045 72.3726 51.3118 72.3726 43.6533V28.7193C72.3726 20.295 75.0531 13.4024 80.414 8.04143C85.7749 2.68048 92.6676 0 101.092 0H114.877C123.301 0 130.194 2.68048 135.555 8.04143C140.916 13.4024 143.596 20.295 143.596 28.7193V43.6533C143.596 51.3118 146.277 58.2045 151.638 64.3312C156.999 69.6922 163.891 72.3726 172.316 72.3726H187.25C194.908 72.3726 201.418 75.0531 206.779 80.414C212.906 85.775 215.969 92.6676 215.969 101.092V114.877C215.969 123.301 212.906 130.194 206.779 135.555C201.418 140.916 194.908 143.596 187.25 143.596H172.316C163.891 143.596 156.999 146.66 151.638 152.787C146.277 158.148 143.596 165.04 143.596 173.465V187.25C143.596 194.908 140.916 201.801 135.555 207.928C130.194 213.289 123.301 215.969 114.877 215.969H101.092Z";
+const D3 = "M141.506 114.512C141.506 121.9 144.348 128.436 150.031 134.119C155.714 139.233 162.533 141.791 170.49 141.791H184.129C192.085 140.654 198.905 142.927 204.588 148.61C210.271 154.293 213.112 161.397 213.112 169.921V182.708C213.112 190.664 210.271 197.484 204.588 203.167C198.905 208.85 192.085 212.26 184.129 213.396H170.49C162.533 213.396 155.714 210.555 150.031 204.872C144.348 199.189 141.506 192.369 141.506 184.413V171.626C141.506 163.102 138.665 155.998 132.982 150.315C127.867 144.632 121.616 141.791 114.228 141.791H98.884C91.4961 141.791 84.9607 144.632 79.2777 150.315C74.163 155.998 71.6057 163.102 71.6057 171.626V184.413C71.6057 192.369 68.7642 199.189 63.0812 204.872C57.3982 210.555 50.5786 213.396 42.6224 213.396H28.9832C21.0271 213.396 14.2075 210.555 8.52448 204.872C2.84149 199.189 0 192.369 0 184.413V171.626C0 163.102 2.84149 155.998 8.52448 150.315C14.2075 144.632 21.0271 141.791 28.9832 141.791H42.6224C50.5786 141.791 57.3982 139.233 63.0812 134.119C68.7642 128.436 71.6057 121.9 71.6057 114.512V99.1682C71.6057 91.7803 68.7642 85.529 63.0812 80.4143C57.3982 74.7313 50.5786 71.8898 42.6224 71.8898H28.9832C21.0271 71.8898 14.2075 69.0483 8.52448 63.3653C2.84149 57.6823 0 50.8627 0 42.9066V29.2674C0 21.3112 2.84149 14.4916 8.52448 8.80863C14.2075 3.12565 21.0271 0.284158 28.9832 0.284158H42.6224C50.5786 0.284158 57.3982 3.12565 63.0812 8.80863C68.7642 14.4916 71.6057 21.3112 71.6057 29.2674V42.9066C71.6057 50.8627 74.163 57.6823 79.2777 63.3653C84.9607 69.0483 91.4961 71.8898 98.884 71.8898H114.228C121.616 71.8898 127.867 69.0483 132.982 63.3653C138.665 57.6823 141.506 50.8627 141.506 42.9066V29.2674C141.506 21.3112 144.348 14.4916 150.031 8.80863C155.714 3.12565 162.533 0.284158 170.49 0.284158H184.129C192.085 -0.852458 198.905 1.42072 204.588 7.10371C210.271 12.2184 213.112 18.7538 213.112 26.71V40.3492C213.112 48.3054 210.271 55.4091 204.588 61.6604C198.905 67.3434 192.085 70.7532 184.129 71.8898H170.49C162.533 71.8898 155.714 74.7313 150.031 80.4143C144.348 85.529 141.506 91.7803 141.506 99.1682V114.512Z";
+
+// Nominal build dimensions (mm). Profile sizes come from the outlines above.
+// The luminaire keeps its earlier proportions to the base: K = 101.6 / 170 of the outline size.
+const K = 101.6 / 170;
+const mm = u => u * K;                       // outline units → millimetres
+const DIM = { base: 101.6, baseH: 60, slab: +mm(44).toFixed(1), bevel: +mm(6).toFixed(1), bevelSeg: 6, arris: 2, density: 2400 };
+
+const SHAPES = [
+  { d: D1, name: "open cross", w: 216.0, h: 216.0, mod: 72.4, r: 28.7, rc: [80.8, 8.4, 44, 42], spots: "axis", anchor: [72, 0] },
+  { d: D2, name: "cross",      w: 216.0, h: 216.0, mod: 72.4, r: 28.7, rc: [80.8, 8.4, 44, 42], spots: "axis", anchor: [72, 0] },
+  { d: D3, name: "four-lobe",  w: 213.1, h: 213.4, mod: 71.6, r: 29.0, rc: [150.0, 8.8, 107, 42], spots: "diag", anchor: [70, 70] },
+];
+const ACCENTS = [
+  { n: "Pink", h: "#ff29a7" }, { n: "Orange", h: "#ff9e28" }, { n: "Lime", h: "#ddff00" },
+  { n: "Green", h: "#21ff8c" }, { n: "Blue", h: "#3138ff" },
+];
+const INK = new THREE.Color("#171014");
+
+/* ── State ────────────────────────────────────────────────────────── */
+const root = document.documentElement;
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const state = { shape: 0, accent: 0, view: 0, hair: false, dark: false };   // opens in light mode
+
+const ease = {
+  io: t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+  out: t => 1 - Math.pow(1 - t, 3),
+};
+class Tw {
+  constructor(v) { this.v = v; this.a = v; this.b = v; this.t0 = 0; this.d = 1; this.e = ease.io; }
+  to(b, d, e = ease.io) { this.a = this.v; this.b = b; this.t0 = performance.now(); this.d = RM ? 1 : d; this.e = e; }
+  step(now) { const k = Math.min(1, (now - this.t0) / this.d); this.v = this.a + (this.b - this.a) * this.e(k); return k < 1; }
+}
+const tView = new Tw(0), tHair = new Tw(0), tNight = new Tw(state.dark ? 0 : 0), tCol = new Tw(1), tPop = new Tw(1), tYaw = new Tw(0);
+const colA = new THREE.Color(ACCENTS[0].h), colB = colA.clone(), accent = colA.clone();
+// Lamp power: waits for the room to darken, then swells smoothly to full output.
+const power = { on: false, t0: 0, from: 0, v: 0, dur: 1 };
+function stepPower(now) {
+  const k = RM ? 1 : Math.min(1, Math.max(0, (now - power.t0) / power.dur));
+  const to = power.on ? 1 : 0;
+  power.v = power.from + (to - power.from) * (power.on ? ease.io(k) : ease.out(k));
+  return k < 1;
+}
+
+/* ── DOM: controls ────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const segShape = $("seg-shape");
+SHAPES.forEach((s, i) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.id = "shape-" + (i + 1); b.setAttribute("aria-pressed", i === 0);
+  b.setAttribute("aria-label", "Profile 0" + (i + 1) + ", " + s.name);
+  b.innerHTML = `<svg viewBox="-4 -4 224 224" aria-hidden="true"><path d="${s.d}" fill-rule="evenodd"/></svg>0${i + 1}`;
+  b.onclick = () => setShape(i);
+  segShape.append(b);
+});
+const sw = $("swatches");
+ACCENTS.forEach((a, i) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "swatch"; b.id = "swatch-" + a.n.toLowerCase();
+  b.setAttribute("role", "radio"); b.setAttribute("aria-checked", i === 0); b.setAttribute("aria-label", a.n + " " + a.h);
+  b.title = a.n + " " + a.h; b.style.setProperty("--c", a.h);
+  b.onclick = () => setAccent(i);
+  sw.append(b);
+});
+$("view-1").onclick = () => setView(0);
+$("view-2").onclick = () => setView(1);
+$("mode-hair").onclick = () => setHair(true);
+$("mode-solid").onclick = () => setHair(false);
+$("dark").onclick = () => setDark(!state.dark);
+addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.target.closest("input, textarea")) return;
+  const k = e.key.toLowerCase();
+  if (k === "1" || k === "2" || k === "3") setShape(+k - 1);
+  else if (k === "v") setView(state.view ? 0 : 1);
+  else if (k === "f") setHair(!state.hair);
+  else if (k === "c") setAccent((state.accent + 1) % ACCENTS.length);
+  else if (k === "d") setDark(!state.dark);
+});
+
+function lineColorFor(hex) {
+  const c = new THREE.Color(hex);
+  const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; // linear luminance
+  return lum > 0.45 ? c.lerp(INK, 0.42) : c;
+}
+function cssHex(c) { return "#" + c.getHexString(THREE.SRGBColorSpace); }
+
+/* ── Setters ──────────────────────────────────────────────────────── */
+function setShape(i) {
+  if (i === state.shape && built) return;
+  state.shape = i;
+  [...segShape.children].forEach((b, j) => b.setAttribute("aria-pressed", j === i));
+  if (built) { applyShape(); tPop.v = 0.9; tPop.to(1, 520, ease.out); kick(); }
+  drawPlan(); writeSpec(); writeHud();
+}
+function setView(v) {
+  state.view = v;
+  $("view-1").setAttribute("aria-pressed", v === 0); $("view-2").setAttribute("aria-pressed", v === 1);
+  tView.to(v, 1150); writeHud(); kick();
+}
+function setHair(on) {
+  state.hair = on;
+  $("mode-hair").setAttribute("aria-pressed", on); $("mode-solid").setAttribute("aria-pressed", !on);
+  tHair.to(on ? 1 : 0, 480); drawPlan(); drawElev(); kick();
+}
+function setAccent(i) {
+  state.accent = i;
+  [...sw.children].forEach((b, j) => b.setAttribute("aria-checked", j === i));
+  colA.copy(accent); colB.set(ACCENTS[i].h); tCol.v = 0; tCol.to(1, 450, ease.out);
+  root.style.setProperty("--accent", ACCENTS[i].h);
+  root.style.setProperty("--accent-line", state.dark ? ACCENTS[i].h : cssHex(lineColorFor(ACCENTS[i].h)));
+  writeSpec(); writeHud(); kick();
+}
+function setDark(on, instant) {
+  state.dark = on;
+  root.classList.toggle("is-dark", on); root.classList.toggle("is-light", !on);
+  $("dark").setAttribute("aria-checked", on); $("dark-lbl").textContent = on ? "Lamp on" : "Lamp off";
+  root.style.setProperty("--accent-line", on ? ACCENTS[state.accent].h : cssHex(lineColorFor(ACCENTS[state.accent].h)));
+  tNight.to(on ? 1 : 0, instant ? 1 : 900);
+  if (!instant && !RM) {
+    root.classList.add("theming"); clearTimeout(setDark.timer);
+    setDark.timer = setTimeout(() => root.classList.remove("theming"), 960);
+  }
+  const now = performance.now();
+  power.from = power.v; power.on = on;
+  if (on) { power.t0 = now + (instant ? 150 : 520); power.dur = 1300; }
+  else { power.t0 = now; power.dur = 420; }
+  kick();
+}
+
+/* ── Schematics (SVG) ─────────────────────────────────────────────── */
+function dimH(x0, x1, y, yFrom, label) {
+  return `<line class="dimln" x1="${x0}" y1="${yFrom}" x2="${x0}" y2="${y - 4}"/>
+    <line class="dimln" x1="${x1}" y1="${yFrom}" x2="${x1}" y2="${y - 4}"/>
+    <line class="dimln" x1="${x0 - 4}" y1="${y}" x2="${x1 + 4}" y2="${y}"/>
+    <line class="tick" x1="${x0 - 3}" y1="${y + 3}" x2="${x0 + 3}" y2="${y - 3}"/>
+    <line class="tick" x1="${x1 - 3}" y1="${y + 3}" x2="${x1 + 3}" y2="${y - 3}"/>
+    <text x="${(x0 + x1) / 2}" y="${y - 4}" text-anchor="middle">${label}</text>`;
+}
+function dimV(y0, y1, x, xFrom, label) {
+  const s = Math.sign(x - xFrom) || -1;
+  return `<line class="dimln" x1="${xFrom}" y1="${y0}" x2="${x + 4 * s}" y2="${y0}"/>
+    <line class="dimln" x1="${xFrom}" y1="${y1}" x2="${x + 4 * s}" y2="${y1}"/>
+    <line class="dimln" x1="${x}" y1="${y0 - 4}" x2="${x}" y2="${y1 + 4}"/>
+    <line class="tick" x1="${x - 3}" y1="${y0 + 3}" x2="${x + 3}" y2="${y0 - 3}"/>
+    <line class="tick" x1="${x - 3}" y1="${y1 + 3}" x2="${x + 3}" y2="${y1 - 3}"/>
+    <text transform="translate(${x - 4} ${(y0 + y1) / 2}) rotate(-90)" text-anchor="middle">${label}</text>`;
+}
+function drawPlan() {
+  const s = SHAPES[state.shape], m1 = s.mod;
+  const a = state.shape === 2 ? 71.6 : 72.37, b = state.shape === 2 ? 141.5 : 143.6;
+  const [px, py, tx, ty] = s.rc;
+  $("plan").style.setProperty("--fillc", state.hair ? "none" : "var(--tint)");
+  $("plan").innerHTML = `
+    <line class="mod" x1="${a}" y1="-6" x2="${a}" y2="${s.h + 6}"/><line class="mod" x1="${b}" y1="-6" x2="${b}" y2="${s.h + 6}"/>
+    <line class="mod" x1="-6" y1="${a}" x2="${s.w + 6}" y2="${a}"/><line class="mod" x1="-6" y1="${b}" x2="${s.w + 6}" y2="${b}"/>
+    <line class="cl" x1="${s.w / 2}" y1="-14" x2="${s.w / 2}" y2="${s.h + 14}"/>
+    <line class="cl" x1="-14" y1="${s.h / 2}" x2="${s.w + 14}" y2="${s.h / 2}"/>
+    <path class="prof" d="${s.d}" fill-rule="evenodd"/>
+    ${dimH(0, s.w, -24, -6, mm(s.w).toFixed(1))}
+    ${dimV(0, s.h, -26, -6, mm(s.h).toFixed(1))}
+    ${dimH(a, b, s.h + 26, s.h + 6, mm(m1).toFixed(1))}
+    <line class="dimln" x1="${px}" y1="${py}" x2="${tx}" y2="${ty - 10}"/>
+    <circle cx="${px}" cy="${py}" r="1.6" class="conc-dot"/>
+    <text x="${tx}" y="${ty}" text-anchor="middle">R${mm(s.r).toFixed(1)}</text>`;
+  $("plan-k").textContent = "0" + (state.shape + 1) + " · " + s.name;
+}
+function drawElev() {
+  // Drawing units are mm / K, so the sheet keeps its layout; labels read true millimetres.
+  const W = 216, B = DIM.base / K, x0 = (W - B) / 2, S = 44, H = DIM.baseH / K, G = S + H, bv = DIM.bevel / K;
+  let hatch = ""; for (let x = -16; x < W + 20; x += 9) hatch += `<line class="hatch" x1="${x}" y1="${G + 7}" x2="${x + 7}" y2="${G}"/>`;
+  $("elev").style.setProperty("--fillc", state.hair ? "none" : "var(--tint)");
+  $("elev").innerHTML = `
+    <defs>
+      <pattern id="conc" width="22" height="22" patternUnits="userSpaceOnUse">
+        <circle class="conc-dot" cx="4" cy="5" r="0.7"/><circle class="conc-dot" cx="15" cy="11" r="0.5"/>
+        <circle class="conc-dot" cx="9" cy="18" r="0.8"/><circle class="conc-dot" cx="19" cy="3" r="0.4"/>
+        <path class="conc-tri" d="M12 4l3 4h-5z"/><path class="conc-tri" d="M3 13l2.6 2.2-3.2 1.2z"/><path class="conc-tri" d="M17 17l2 3.4h-3.8z"/>
+      </pattern>
+      <clipPath id="gclip"><rect x="-24" y="${G}" width="${W + 48}" height="9"/></clipPath>
+    </defs>
+    <line class="cl" x1="${W / 2}" y1="-12" x2="${W / 2}" y2="${G + 12}"/>
+    <g clip-path="url(#gclip)">${hatch}</g>
+    <line class="ground" x1="-24" y1="${G}" x2="${W + 24}" y2="${G}"/>
+    <path class="base" fill="url(#conc)" d="M${x0 + DIM.arris} ${S} H${x0 + B - DIM.arris} L${x0 + B} ${S + DIM.arris} V${G} H${x0} V${S + DIM.arris} Z"/>
+    <rect class="prof" x="0" y="0" width="${W}" height="${S}" rx="${bv + 1}"/>
+    <line class="lo" x1="${bv}" y1="${bv}" x2="${W - bv}" y2="${bv}"/>
+    <line class="lo" x1="${bv}" y1="${S - bv}" x2="${W - bv}" y2="${S - bv}"/>
+    ${dimH(0, W, -22, -4, mm(W).toFixed(1))}
+    ${dimH(x0, x0 + B, G + 24, G + 10, DIM.base.toFixed(1))}
+    ${dimV(0, S, W + 22, W + 4, DIM.slab.toFixed(1))}
+    ${dimV(S, G, W + 22, x0 + B + 4, DIM.baseH.toFixed(1))}
+    ${dimV(0, G, W + 50, W + 30, (DIM.slab + DIM.baseH).toFixed(1))}
+    <line class="dimln" x1="${bv + 1}" y1="${bv + 1}" x2="-14" y2="-12"/>
+    <text x="-14" y="-15" text-anchor="middle">R${DIM.bevel.toFixed(1)}</text>`;
+}
+const BEVEL = { min: 0.5, max: 8 };   // mm; the slab is 26.3 mm deep, so 8 mm still leaves a straight band
+function edgeText() {
+  const s = SHAPES[state.shape];
+  return `R${mm(s.r).toFixed(1)} plan · R${DIM.bevel.toFixed(1)} bevel, ${DIM.bevelSeg} seg`;
+}
+function setBevel(b) {
+  DIM.bevel = Math.min(BEVEL.max, Math.max(BEVEL.min, +b.toFixed(1)));
+  $("bevel-out").textContent = DIM.bevel.toFixed(1) + " mm";
+  $("bevel").setAttribute("aria-valuetext", DIM.bevel.toFixed(1) + " millimetres");
+  $("edge-cell").textContent = edgeText();
+  setBevelFill(); drawElev();
+  bevelPending = true; kick();       // rebuilt once per frame, however fast the slider moves
+}
+let bevelPending = false;
+function setBevelFill() { $("bevel").style.setProperty("--pct", ((DIM.bevel - BEVEL.min) / (BEVEL.max - BEVEL.min) * 100).toFixed(1) + "%"); }
+function writeSpec() {
+  const s = SHAPES[state.shape], a = ACCENTS[state.accent];
+  const mass = DIM.density * (DIM.base / 1000) ** 2 * (DIM.baseH / 1000);
+  const rows = [
+    ["Profile", "0" + (state.shape + 1) + " · " + s.name],
+    ["Profile envelope", `${mm(s.w).toFixed(1)} × ${mm(s.h).toFixed(1)} mm`],
+    ["Grid module", `${mm(s.mod).toFixed(1)} mm, 3 × 3`],
+    ["Edge radius", `<span id="edge-cell">${edgeText()}</span>`],
+    [`<label for="bevel">Bevel</label>`, `<div class="bev"><input type="range" id="bevel" min="${BEVEL.min}" max="${BEVEL.max}" step="0.1" value="${DIM.bevel}" aria-valuetext="${DIM.bevel.toFixed(1)} millimetres"><output id="bevel-out" for="bevel">${DIM.bevel.toFixed(1)} mm</output></div>`],
+    ["Luminaire slab", `${DIM.slab} mm, opal diffuser`],
+    ["Base", `Cast concrete, ${DIM.base} × ${DIM.base} × ${DIM.baseH} mm`],
+    ["Base arris", `${DIM.arris} mm chamfer`],
+    ["Overall height", `${(DIM.slab + DIM.baseH).toFixed(1)} mm`],
+    ["Base mass, est.", `${mass.toFixed(1)} kg at ${DIM.density} kg/m³`],
+    ["Light colour", `<span class="chip"></span>${a.n} ${a.h.toUpperCase()}`],
+  ];
+  $("spec").innerHTML = rows.map(([k, v]) => `<tr><th class="k">${k}</th><td>${v}</td></tr>`).join("");
+  $("bevel").addEventListener("input", e => setBevel(+e.target.value));
+  setBevelFill();
+  $("tb-dwg").textContent = "JMS-01-S" + (state.shape + 1);
+  $("tb-sheet").textContent = (state.shape + 1) + " / 3";
+}
+function writeHud() {
+  $("hud-view").textContent = state.view ? "VIEW 2 · FRONTAL" : "VIEW 1 · UPRIGHT";
+  $("hud-shape").textContent = "PROFILE 0" + (state.shape + 1) + " · " + ACCENTS[state.accent].n.toUpperCase();
+}
+
+/* ── Three.js scene ───────────────────────────────────────────────── */
+const viewer = $("viewer");
+let renderer, built = false;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+} catch (err) {
+  viewer.insertAdjacentHTML("beforeend", `<div class="gl-error">This browser could not start WebGL, so the 3D model can't be shown. The drawings alongside still update.</div>`);
+}
+
+let scene, camera, composer, bloom, lamp = {};
+const vTmp = new THREE.Vector3();
+
+function concreteTexture() {
+  const c = document.createElement("canvas"); c.width = c.height = 512;
+  const g = c.getContext("2d"), img = g.createImageData(512, 512), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const px = (i / 4) % 512, py = Math.floor(i / 4 / 512);
+    const n = 196 + (Math.random() - 0.5) * 26 + Math.sin(px * 0.05 + py * 0.031) * 3;
+    d[i] = n; d[i + 1] = n - 2; d[i + 2] = n - 5; d[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  for (let i = 0; i < 900; i++) { // pores and aggregate
+    const r = Math.random() * 1.6 + 0.3, x = Math.random() * 512, y = Math.random() * 512;
+    g.fillStyle = Math.random() < 0.7 ? `rgba(70,64,60,${0.18 + Math.random() * 0.3})` : `rgba(255,252,246,${0.25 + Math.random() * 0.3})`;
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+function aoTexture() {
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const g = c.getContext("2d");
+  g.filter = "blur(22px)"; g.fillStyle = "#000"; g.fillRect(60, 60, 136, 136);
+  const t = new THREE.CanvasTexture(c); return t;
+}
+
+function buildProfile(d) {
+  const data = new SVGLoader().parse(`<svg xmlns="http://www.w3.org/2000/svg"><path d="${d}"/></svg>`);
+  const shapes = SVGLoader.createShapes(data.paths[0]);
+  // A hand-built bevelled slab. Each outline is resampled at an even 1.5-unit spacing and given smoothed
+  // outward normals, then offset along a true quarter-ellipse bevel. Unlike ExtrudeGeometry's mitred bevel,
+  // the offset rings can't fold over themselves at the outline's kinks, however large the bevel.
+  const T = DIM.slab, bs = DIM.bevel, bt = Math.min(bs * 7 / 6, T * 0.45), S = DIM.bevelSeg;
+  const box = new THREE.Box2();
+  shapes.forEach(sh => sh.getPoints().forEach(p => box.expandByPoint(p)));
+  const c = box.getCenter(new THREE.Vector2());
+
+  // Bevel profile, top cap edge → wall → bottom cap edge: [offset along normal, z, normal h, normal z]
+  const prof = [];
+  for (let j = 0; j <= S; j++) { const t = j / S * Math.PI / 2; prof.push([-bs * (1 - Math.sin(t)), T - bt * (1 - Math.cos(t)), bt * Math.sin(t), bs * Math.cos(t)]); }
+  for (let j = S; j >= 0; j--) { const t = j / S * Math.PI / 2; prof.push([-bs * (1 - Math.sin(t)), bt * (1 - Math.cos(t)), bt * Math.sin(t), -bs * Math.cos(t)]); }
+  const R = prof.length;
+
+  const pos = [], nor = [], idx = [], lines = [];
+  const vtx = i => new THREE.Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), fn = new THREE.Vector3();
+  const faceAgrees = (a, b, cc, nx, ny, nz) => {
+    ab.subVectors(vtx(b), vtx(a)); ac.subVectors(vtx(cc), vtx(a)); fn.crossVectors(ab, ac);
+    return fn.x * nx + fn.y * ny + fn.z * nz > 0;
+  };
+
+  function contour(path, ccw) {
+    let pts = path.getSpacedPoints(Math.max(96, Math.ceil(path.getLength() / 1.5)));
+    if (pts[0].distanceTo(pts[pts.length - 1]) < 1e-4) pts.pop();
+    pts = pts.map(p => new THREE.Vector2((p.x - c.x) * K, (p.y - c.y) * K));
+    if (THREE.ShapeUtils.isClockWise(pts) === ccw) pts.reverse();
+    const n = pts.length, k = 2;
+    const nrm = pts.map((_, i) => {   // outward from the solid: right-hand normal of a CCW outer / CW hole
+      const a = pts[(i - k + n) % n], b = pts[(i + k) % n];
+      return new THREE.Vector2(b.y - a.y, -(b.x - a.x)).normalize();
+    });
+    const b0 = pos.length / 3;
+    for (const [h, z, nh, nz] of prof) {
+      const L = Math.hypot(nh, nz) || 1;
+      for (let i = 0; i < n; i++) {
+        pos.push(pts[i].x + nrm[i].x * h, pts[i].y + nrm[i].y * h, z);
+        nor.push(nrm[i].x * nh / L, nrm[i].y * nh / L, nz / L);
+      }
+    }
+    // Side band (bevels + wall), wound to face along the normals
+    const w = b0 + S * n, flip = !faceAgrees(w, w + n, w + 1, nrm[0].x, nrm[0].y, 0);
+    for (let r = 0; r < R - 1; r++) for (let i = 0; i < n; i++) {
+      const a = b0 + r * n + i, b = b0 + r * n + (i + 1) % n, d1 = a + n, d2 = b + n;
+      if (flip) idx.push(a, b, d1, b, d2, d1); else idx.push(a, d1, b, b, d1, d2);
+    }
+    // Contour lines: every bevel ring, which is what the hairline view draws
+    for (let r = 0; r < R; r++) for (let i = 0; i < n; i++) {
+      const a = b0 + r * n + i, b = b0 + r * n + (i + 1) % n;
+      lines.push(pos[a * 3], pos[a * 3 + 1], pos[a * 3 + 2], pos[b * 3], pos[b * 3 + 1], pos[b * 3 + 2]);
+    }
+    return { b0, n };
+  }
+
+  for (const sh of shapes) {
+    const outer = contour(sh, true), holes = sh.holes.map(h => contour(h, false));
+    for (const [r, nz] of [[0, 1], [R - 1, -1]]) {   // top and bottom caps on the innermost rings
+      const ring = q => Array.from({ length: q.n }, (_, i) => { const v = q.b0 + r * q.n + i; return new THREE.Vector2(pos[v * 3], pos[v * 3 + 1]); });
+      const tris = THREE.ShapeUtils.triangulateShape(ring(outer), holes.map(ring));
+      const map = [];
+      for (const q of [outer, ...holes]) for (let i = 0; i < q.n; i++) map.push(q.b0 + r * q.n + i);
+      const t0 = tris.find(t => true);
+      const flip = t0 && !faceAgrees(map[t0[0]], map[t0[1]], map[t0[2]], 0, 0, nz);
+      for (const t of tris) flip ? idx.push(map[t[0]], map[t[2]], map[t[1]]) : idx.push(map[t[0]], map[t[1]], map[t[2]]);
+    }
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setIndex(idx);
+  const edges = new THREE.BufferGeometry();
+  edges.setAttribute("position", new THREE.Float32BufferAttribute(lines, 3));
+  for (const geo of [g, edges]) {
+    geo.rotateX(Math.PI / 2);          // lie flat: the slab runs down from y = 0, SVG +y runs toward the viewer
+    geo.translate(0, T, 0);            // sit on the base top (y = 0)
+  }
+  return { geo: g, edges, bevel: DIM.bevel };
+}
+
+function initScene() {
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NoToneMapping;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  viewer.prepend(renderer.domElement);
+
+  scene = new THREE.Scene();
+  // Background and drawing grid, rendered behind the model in screen space (16 px minor, 80 px major).
+  const gridMat = new THREE.ShaderMaterial({
+    uniforms: { uBg: { value: new THREE.Color() }, uMinor: { value: new THREE.Color() }, uMajor: { value: new THREE.Color() }, uDpr: { value: 1 }, uH: { value: 1 } },
+    vertexShader: `void main() { gl_Position = vec4(position.xy, 1.0, 1.0); }`,
+    fragmentShader: `uniform vec3 uBg, uMinor, uMajor; uniform float uDpr, uH;
+      void main() {
+        vec2 p = vec2(gl_FragCoord.x, uH - gl_FragCoord.y) / uDpr;
+        vec2 mi = step(mod(p, 16.0), vec2(1.0)), ma = step(mod(p, 80.0), vec2(1.0));
+        vec3 c = mix(uBg, uMinor, max(mi.x, mi.y));
+        c = mix(c, uMajor, max(ma.x, ma.y));
+        gl_FragColor = vec4(c, 1.0);
+        #include <colorspace_fragment>
+      }`,
+    depthTest: false, depthWrite: false,
+  });
+  const gridQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), gridMat);
+  gridQuad.frustumCulled = false; gridQuad.renderOrder = -1000;
+  scene.add(gridQuad);
+  lamp.gridMat = gridMat;
+  viewer.classList.add("gl");
+  camera = new THREE.PerspectiveCamera(28, 1, 10, 9000);
+
+  // Hierarchy: turntable (drag yaw) → lift (height) → tilt (View 1 ↔ 2) → content (lamp, origin at its centre)
+  const turntable = new THREE.Group(), lift = new THREE.Group(), tilt = new THREE.Group(), content = new THREE.Group();
+  scene.add(turntable); turntable.add(lift); lift.add(tilt); tilt.add(content);
+  content.position.y = (DIM.baseH - DIM.slab) / 2;
+  Object.assign(lamp, { turntable, lift, tilt, content });
+
+  // Profiles
+  lamp.profiles = SHAPES.map(s => buildProfile(s.d));
+
+  const depthMat = new THREE.MeshBasicMaterial({ colorWrite: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  const lumMat = new THREE.MeshStandardMaterial({
+    color: accent, emissive: accent, emissiveIntensity: 0.2, roughness: 0.42, metalness: 0,
+    transparent: true, opacity: 0.92, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+  });
+  // Backlit diffuser: edges and bevels seen at a grazing angle glow brighter than the face.
+  lumMat.onBeforeCompile = sh => {
+    sh.fragmentShader = sh.fragmentShader.replace("#include <emissivemap_fragment>",
+      `#include <emissivemap_fragment>
+      float fres = 1.0 - abs(dot(normal, normalize(vViewPosition)));
+      totalEmissiveRadiance *= mix(0.5, 1.7, pow(fres, 1.6));`);
+  };
+  const lineMat = new THREE.LineBasicMaterial({ color: accent, transparent: true, depthWrite: false });
+  const hidMat = new THREE.LineDashedMaterial({ color: accent, transparent: true, depthWrite: false, depthFunc: THREE.GreaterDepth, dashSize: 4, gapSize: 3 });
+
+  const lumGroup = new THREE.Group(); content.add(lumGroup);
+  const lumDepth = new THREE.Mesh(undefined, depthMat);
+  const lumSolid = new THREE.Mesh(undefined, lumMat); lumSolid.castShadow = true; lumSolid.renderOrder = 1;
+  const lumLines = new THREE.LineSegments(undefined, lineMat); lumLines.renderOrder = 2;
+  const lumHidden = new THREE.LineSegments(undefined, hidMat); lumHidden.renderOrder = 3;
+  lumGroup.add(lumDepth, lumSolid, lumLines, lumHidden);
+
+  // Base: lightly chamfered concrete monolith
+  const baseGeo = new RoundedBoxGeometry(DIM.base, DIM.baseH, DIM.base, 2, DIM.arris);
+  baseGeo.translate(0, -DIM.baseH / 2, 0);
+  const tex = concreteTexture();
+  const baseMat = new THREE.MeshStandardMaterial({
+    color: 0xd2cec8, map: tex, bumpMap: tex, bumpScale: 1.2, roughness: 0.94, metalness: 0,
+    transparent: true, opacity: 1, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+  });
+  const baseSolid = new THREE.Mesh(baseGeo, baseMat); baseSolid.castShadow = true; baseSolid.receiveShadow = true;
+  const baseDepth = new THREE.Mesh(baseGeo, depthMat);
+  // Base outline drawn explicitly: each of the 12 edges as the two boundaries of its arris chamfer.
+  const baseEdgeGeo = (() => {
+    const hx = DIM.base / 2, c = DIM.arris, y0 = -DIM.baseH, y1 = 0, pts = [];
+    const L = (a, b) => pts.push(...a, ...b);
+    for (const sy of [y0, y1]) for (const sz of [-hx, hx]) {           // edges along x
+      const iy = sy === y0 ? c : -c, iz = sz < 0 ? c : -c;
+      L([-hx + c, sy + iy, sz], [hx - c, sy + iy, sz]); L([-hx + c, sy, sz + iz], [hx - c, sy, sz + iz]);
+    }
+    for (const sy of [y0, y1]) for (const sx of [-hx, hx]) {           // edges along z
+      const iy = sy === y0 ? c : -c, ix = sx < 0 ? c : -c;
+      L([sx, sy + iy, -hx + c], [sx, sy + iy, hx - c]); L([sx + ix, sy, -hx + c], [sx + ix, sy, hx - c]);
+    }
+    for (const sx of [-hx, hx]) for (const sz of [-hx, hx]) {          // vertical edges
+      const ix = sx < 0 ? c : -c, iz = sz < 0 ? c : -c;
+      L([sx + ix, y0 + c, sz], [sx + ix, y1 - c, sz]); L([sx, y0 + c, sz + iz], [sx, y1 - c, sz + iz]);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); return g;
+  })();
+  const bLineMat = new THREE.LineBasicMaterial({ color: INK, transparent: true, depthWrite: false });
+  const bHidMat = new THREE.LineDashedMaterial({ color: INK, transparent: true, depthWrite: false, depthFunc: THREE.GreaterDepth, dashSize: 4, gapSize: 3 });
+  const baseLines = new THREE.LineSegments(baseEdgeGeo, bLineMat); baseLines.renderOrder = 2;
+  const baseHidden = new THREE.LineSegments(baseEdgeGeo, bHidMat); baseHidden.renderOrder = 3; baseHidden.computeLineDistances();
+  content.add(baseDepth, baseSolid, baseLines, baseHidden);
+
+  // Ground: a shadow catcher for daylight, an additive light catcher for the lamp, and a contact AO pad.
+  const groundGeo = new THREE.CircleGeometry(4200, 64); groundGeo.rotateX(-Math.PI / 2);
+  const shadowGround = new THREE.Mesh(groundGeo, new THREE.ShadowMaterial({ color: INK, opacity: 0.16, depthWrite: false }));
+  shadowGround.receiveShadow = true; shadowGround.renderOrder = -2;
+  const lightGround = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({
+    color: 0x000000, roughness: 1, metalness: 0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  lightGround.receiveShadow = true; lightGround.renderOrder = -1;
+  const ao = new THREE.Mesh(new THREE.PlaneGeometry(DIM.base * 1.9, DIM.base * 1.9).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: aoTexture(), transparent: true, depthWrite: false, opacity: 0.3 }));
+  ao.position.y = 0.2; ao.renderOrder = -1;
+  scene.add(shadowGround, lightGround);
+  turntable.add(ao);
+
+  // Daylight
+  const hemi = new THREE.HemisphereLight(0xffffff, 0xd9d6d2, 1.5);
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  sun.position.set(-380, 820, 520); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -420, right: 420, top: 420, bottom: -420, near: 100, far: 2400 });
+  sun.shadow.radius = 6; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.6;
+  scene.add(hemi, sun, sun.target);
+
+  // Lamp light: four spots tucked under the overhang, aimed straight down so they graze the concrete
+  // and pool on the floor, with the base throwing real shadows.
+  const spots = [0, 1, 2, 3].map(() => {
+    const s = new THREE.SpotLight(accent, 0, 760, Math.PI * 0.34, 1, 0);
+    s.shadow.mapSize.set(512, 512); s.shadow.camera.near = 4; s.shadow.camera.far = 1100;
+    s.shadow.bias = -0.0006; s.shadow.normalBias = 0.8; s.shadow.radius = 4;
+    content.add(s, s.target); return s;
+  });
+  // A soft uplight above the face: lights nothing much, but tints the slab's own bevels from outside.
+  const up = new THREE.PointLight(accent, 0, 420, 0); up.position.set(0, DIM.slab + 60, 0); content.add(up);
+
+  composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
+  composer.addPass(new RenderPass(scene, camera));
+  bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0, 0.35, 0.3);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+
+  Object.assign(lamp, {
+    lumGroup, lumDepth, lumSolid, lumLines, lumHidden, lumMat, lineMat, hidMat,
+    baseSolid, baseLines, baseHidden, baseMat, bLineMat, bHidMat,
+    shadowGround, lightGround, ao, hemi, sun, spots, up,
+  });
+  built = true;
+  applyShape();
+  resize();
+  lamp.spots.forEach(s => s.castShadow = true);
+  composer.render(); renderer.render(scene, camera);
+  lamp.spots.forEach(s => s.castShadow = false);
+  shadowsOn = false;
+}
+
+function applyShape() {
+  let p = lamp.profiles[state.shape];
+  if (p.bevel !== DIM.bevel) {         // profiles rebuild lazily when the bevel has changed
+    p.geo.dispose(); p.edges.dispose();
+    p = lamp.profiles[state.shape] = buildProfile(SHAPES[state.shape].d);
+  }
+  lamp.lumDepth.geometry = p.geo; lamp.lumSolid.geometry = p.geo;
+  lamp.lumLines.geometry = p.edges; lamp.lumHidden.geometry = p.edges;
+  if (!p.edges.attributes.lineDistance) lamp.lumHidden.computeLineDistances();
+  // Under the overhang, just outside the base footprint.
+  const R = 57, D = 55, diag = SHAPES[state.shape].spots === "diag";
+  const pts = diag ? [[D, D], [-D, D], [D, -D], [-D, -D]] : [[R, 0], [-R, 0], [0, R], [0, -R]];
+  lamp.spots.forEach((s, i) => { s.position.set(pts[i][0], -3, pts[i][1]); s.target.position.set(pts[i][0], -400, pts[i][1]); });
+}
+
+/* ── Size and camera ──────────────────────────────────────────────── */
+let W = 1, H = 1;
+function resize() {
+  if (!built) return;
+  const r = viewer.getBoundingClientRect();
+  W = Math.max(1, r.width); H = Math.max(1, r.height);
+  renderer.setSize(W, H, false);
+  composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(W, H);
+  camera.aspect = W / H;
+  const panel = $("panel"), floating = getComputedStyle(panel).position === "absolute";
+  const lift = floating ? panel.offsetHeight * 0.5 + 8 : 0;
+  camera.setViewOffset(W, H, 0, lift, W, H);
+  lamp.gridMat.uniforms.uDpr.value = renderer.getPixelRatio();
+  lamp.gridMat.uniforms.uH.value = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
+  camera.updateProjectionMatrix();
+  $("annot").setAttribute("viewBox", `0 0 ${W} ${H}`);
+  kick();
+}
+new ResizeObserver(resize).observe(viewer);
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const camState = { az: 34, el: 22 };
+function placeCamera(v) {
+  const fit = Math.min(2.3, Math.max(1, 1.25 / camera.aspect));
+  const az = THREE.MathUtils.degToRad(camState.az = lerp(34, 0, v));
+  const el = THREE.MathUtils.degToRad(camState.el = lerp(22, 6, v));
+  const r = lerp(460, 455, v) * fit;
+  const ty = lerp(41, 72, v);
+  camera.position.set(r * Math.sin(az) * Math.cos(el), ty + r * Math.sin(el), r * Math.cos(az) * Math.cos(el));
+  camera.lookAt(0, ty, 0);
+}
+
+/* ── Pointer: drag turns the lamp ─────────────────────────────────── */
+let yaw = 0, yawVel = 0, dragging = false, lastX = 0, lastT = 0;
+viewer.addEventListener("pointerdown", e => {
+  if (e.target.closest(".panel") || e.button !== 0) return;
+  dragging = true; lastX = e.clientX; lastT = performance.now(); yawVel = 0; tYaw.active = false;
+  viewer.setPointerCapture(e.pointerId); viewer.classList.add("dragging"); kick();
+});
+viewer.addEventListener("pointermove", e => {
+  if (!dragging) return;
+  const now = performance.now(), dx = e.clientX - lastX;
+  yaw += dx * 0.0085; yawVel = (dx * 0.0085) / Math.max(8, now - lastT) * 1000;
+  lastX = e.clientX; lastT = now; kick();
+});
+const endDrag = () => { if (!dragging) return; dragging = false; viewer.classList.remove("dragging"); if (RM) yawVel = 0; kick(); };
+viewer.addEventListener("pointerup", endDrag);
+viewer.addEventListener("pointercancel", endDrag);
+viewer.addEventListener("dblclick", e => {
+  if (e.target.closest(".panel")) return;
+  yawVel = 0; tYaw.v = yaw; tYaw.to(Math.round(yaw / (Math.PI * 2)) * Math.PI * 2, 700, ease.out); tYaw.active = true; kick();
+});
+
+/* ── Annotations projected from the model ─────────────────────────── */
+const proj = (x, y, z) => {
+  vTmp.set(x, y, z).applyMatrix4(lamp.content.matrixWorld).project(camera);
+  return [(vTmp.x + 1) / 2 * W, (1 - vTmp.y) / 2 * H];
+};
+function setDim(g, a, b, c, label, alpha) {
+  g.style.opacity = alpha;
+  if (alpha < 0.01) return;
+  let dx = b[0] - a[0], dy = b[1] - a[1]; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+  let nx = -dy, ny = dx;
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+  if (nx * (mx - c[0]) + ny * (my - c[1]) < 0) { nx = -nx; ny = -ny; }
+  const off = 26, [e1, e2, d, t1, t2] = g.querySelectorAll("line"), tx = g.querySelector("text");
+  const A = [a[0] + nx * off, a[1] + ny * off], B = [b[0] + nx * off, b[1] + ny * off];
+  const set = (el, x1, y1, x2, y2) => { el.setAttribute("x1", x1.toFixed(1)); el.setAttribute("y1", y1.toFixed(1)); el.setAttribute("x2", x2.toFixed(1)); el.setAttribute("y2", y2.toFixed(1)); };
+  set(e1, a[0] + nx * 8, a[1] + ny * 8, a[0] + nx * (off + 5), a[1] + ny * (off + 5));
+  set(e2, b[0] + nx * 8, b[1] + ny * 8, b[0] + nx * (off + 5), b[1] + ny * (off + 5));
+  set(d, A[0] - dx * 5, A[1] - dy * 5, B[0] + dx * 5, B[1] + dy * 5);
+  const kx = (dx + nx) * 3, ky = (dy + ny) * 3;
+  set(t1, A[0] - kx, A[1] - ky, A[0] + kx, A[1] + ky);
+  set(t2, B[0] - kx, B[1] - ky, B[0] + kx, B[1] + ky);
+  tx.setAttribute("x", (mx + nx * (off + 13)).toFixed(1)); tx.setAttribute("y", (my + ny * (off + 13) + 3.5).toFixed(1));
+  tx.textContent = label;
+}
+function setCall(g, p, dx, dy, label, alpha) {
+  g.style.opacity = alpha;
+  if (alpha < 0.01) return;
+  const ex = p[0] + dx, ey = p[1] + dy, hx = ex + (dx > 0 ? 34 : -34);
+  g.querySelector("path").setAttribute("d", `M${p[0].toFixed(1)} ${p[1].toFixed(1)}L${ex.toFixed(1)} ${ey.toFixed(1)}H${hx.toFixed(1)}`);
+  const c = g.querySelector("circle"); c.setAttribute("cx", p[0].toFixed(1)); c.setAttribute("cy", p[1].toFixed(1));
+  const t = g.querySelector("text");
+  t.setAttribute("x", (dx > 0 ? hx + 6 : hx - 6).toFixed(1)); t.setAttribute("y", (ey + 3.5).toFixed(1));
+  t.setAttribute("text-anchor", dx > 0 ? "start" : "end"); t.textContent = label;
+}
+const annot = { W: $("dimW"), H: $("dimH"), A: $("callA"), B: $("callB") };
+function updateAnnot(v) {
+  const B2 = DIM.base / 2, s = SHAPES[state.shape], hw = mm(s.w) / 2, top = DIM.slab, bot = -DIM.baseH;
+  const c = proj(0, (top + bot) / 2, 0);
+  const swap = v < 0.5, a = Math.abs(v - 0.5) * 2, fade = a * a;
+  if (swap) {
+    setDim(annot.W, proj(-B2, bot, B2), proj(B2, bot, B2), c, DIM.base.toFixed(1), fade);
+    setDim(annot.H, proj(-B2, bot, B2), proj(-B2, top, B2), c, (DIM.slab + DIM.baseH).toFixed(1), fade);
+  } else {
+    setDim(annot.W, proj(-hw, top, hw), proj(hw, top, hw), c, mm(s.w).toFixed(1), fade);
+    setDim(annot.H, proj(-hw, top, -hw), proj(-hw, top, hw), c, mm(s.h).toFixed(1), fade);
+  }
+  const narrow = W < 520;
+  setCall(annot.A, proj(mm(s.anchor[0]), top, mm(s.anchor[1])), narrow ? 40 : 70, narrow ? -70 : -86, "A · LUMINAIRE", 1);
+  setCall(annot.B, proj(-B2 * 0.4, bot * 0.55, B2), narrow ? -30 : -60, 64, "B · CONCRETE BASE", Math.max(0, 1 - v * 2.2));
+}
+
+/* ── Frame loop ───────────────────────────────────────────────────── */
+let dirty = true, running = false, frames = 0, fpsT = 0, lastNow = 0, shadowsOn = null;
+const lineHair = new THREE.Color(), lineSolid = new THREE.Color(), tmpC = new THREE.Color(), WHITE = new THREE.Color(1, 1, 1), BLACK = new THREE.Color(0, 0, 0);
+function kick() { dirty = true; if (!running && built) { running = true; lastNow = performance.now(); requestAnimationFrame(frame); } }
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - lastNow) / 1000); lastNow = now;
+  let active = false;
+  active = tView.step(now) | active;
+  active = tHair.step(now) | active;
+  active = tNight.step(now) | active;
+  active = tCol.step(now) | active;
+  active = tPop.step(now) | active;
+  active = stepPower(now) | active;
+  if (tYaw.active) { const go = tYaw.step(now); yaw = tYaw.v; if (!go) tYaw.active = false; active = active || go; }
+  if (!dragging && Math.abs(yawVel) > 0.002) { yaw += yawVel * dt; yawVel *= Math.exp(-dt * 4.2); active = true; }
+  else if (!dragging) yawVel = 0;
+  if (dragging) active = true;
+
+  if (bevelPending && built) { bevelPending = false; applyShape(); }
+  if (active || dirty) { update(); render(); dirty = false; }
+
+  frames++;
+  if (now - fpsT > 500) { $("hud-fps").textContent = active ? Math.round(frames * 1000 / (now - fpsT)) + " FPS" : "IDLE"; frames = 0; fpsT = now; }
+  if (active) requestAnimationFrame(frame); else { running = false; $("hud-fps").textContent = "IDLE"; }
+}
+
+function update() {
+  const v = tView.v, h = tHair.v, n = tNight.v, p = power.v;
+  accent.copy(colA).lerp(colB, tCol.v);
+
+  // Pose
+  lamp.turntable.rotation.y = yaw;
+  lamp.lift.position.y = lerp((DIM.baseH + DIM.slab) / 2, 72, v);
+  lamp.tilt.rotation.x = v * Math.PI / 2;
+  lamp.lumGroup.scale.setScalar(tPop.v);
+  placeCamera(v);
+
+  // Ground and sky
+  // Same sRGB interpolation and curve as the page's CSS colour transition.
+  const bgS = 1 - n, inkS = [lerp(0x17, 0xf1, n) / 255, lerp(0x10, 0xed, n) / 255, lerp(0x14, 0xef, n) / 255];
+  const mixS = (out, a) => out.setRGB(lerp(bgS, inkS[0], a), lerp(bgS, inkS[1], a), lerp(bgS, inkS[2], a), THREE.SRGBColorSpace);
+  const gu = lamp.gridMat.uniforms;
+  mixS(gu.uBg.value, 0); mixS(gu.uMinor.value, 0.04); mixS(gu.uMajor.value, 0.075);
+  lamp.hemi.color.copy(WHITE).lerp(accent, n); lamp.hemi.groundColor.setRGB(0.85, 0.84, 0.82).lerp(BLACK, n);
+  lamp.hemi.intensity = lerp(1.5, 0.03 + 0.22 * p, n);
+  lamp.sun.intensity = lerp(2.2, 0, n);
+  lamp.shadowGround.material.opacity = 0.16 * (1 - n);
+  lamp.lightGround.material.color.setScalar(0.09 * n * (1 - 0.65 * v));
+  lamp.lightGround.visible = n > 0.01;
+  lamp.ao.material.opacity = lerp(0.32, 0.7, n) * (1 - v) * (1 - h * 0.6);
+
+  // Light colour and power
+  const glow = 1 - h * 0.35;
+  lamp.spots.forEach(s => { s.color.copy(accent); s.intensity = 1.5 * p * glow; });
+  lamp.up.color.copy(accent); lamp.up.intensity = 0.25 * p * glow;
+  const wantShadows = p > 0.001;
+  if (wantShadows !== shadowsOn) { lamp.spots.forEach(s => s.castShadow = wantShadows); shadowsOn = wantShadows; }
+  bloom.strength = 0.5 * p; bloom.radius = 0.28 + 0.08 * p; bloom.enabled = p > 0.001;
+
+  // Luminaire material: daylight tint → powered emission
+  const lm = lamp.lumMat;
+  lm.color.copy(accent); lm.emissive.copy(accent);
+  lm.emissiveIntensity = lerp(0.22, 0.05, n) + 0.72 * p;
+  lm.opacity = (1 - h) * lerp(0.9, 0.97, n);
+  lamp.lumSolid.visible = lm.opacity > 0.005;
+
+  // Lines: hairline mode strokes the profile; solid mode keeps a faint edge highlight
+  lineHair.copy(n > 0.5 ? accent : lineColorFor("#" + accent.getHexString())).lerp(accent, n);
+  lineSolid.copy(accent).lerp(WHITE, 0.55 * (1 - n));
+  tmpC.copy(lineSolid).lerp(lineHair, h).multiplyScalar(1 + 0.7 * p * h);
+  lamp.lineMat.color.copy(tmpC); lamp.hidMat.color.copy(tmpC);
+  lamp.lineMat.opacity = lerp(0.35, 1, h);
+  lamp.hidMat.opacity = 0.32 * h; lamp.lumHidden.visible = h > 0.01;
+
+  const bm = lamp.baseMat; bm.opacity = 1 - h; lamp.baseSolid.visible = bm.opacity > 0.005;
+  bm.color.setRGB(0.82, 0.8, 0.77);
+  tmpC.copy(INK).lerp(new THREE.Color(0.42, 0.4, 0.43), n);
+  lamp.bLineMat.color.copy(tmpC); lamp.bHidMat.color.copy(tmpC);
+  lamp.bLineMat.opacity = 0.85 * h; lamp.bHidMat.opacity = 0.25 * h;
+  lamp.baseLines.visible = lamp.baseHidden.visible = h > 0.01;
+
+  $("hud-cam").textContent = `AZ ${(camState.az - THREE.MathUtils.radToDeg(yaw) % 360).toFixed(1)}° · EL ${camState.el.toFixed(1)}°`;
+}
+
+function render() {
+  scene.updateMatrixWorld();
+  if (power.v > 0.001 || tNight.v > 0.001) composer.render(); else renderer.render(scene, camera);
+  updateAnnot(tView.v);
+}
+
+/* ── Collapsible drawing panels: remember what the viewer closed ───── */
+document.querySelectorAll("details.drawing").forEach(d => {
+  try { if (localStorage.getItem("jamms:" + d.id) === "closed") d.open = false; } catch {}
+  d.addEventListener("toggle", () => { try { localStorage.setItem("jamms:" + d.id, d.open ? "open" : "closed"); } catch {} });
+});
+
+/* ── Boot ─────────────────────────────────────────────────────────── */
+drawPlan(); drawElev(); writeSpec(); writeHud();
+setAccent(0);
+tCol.v = 1; tCol.d = 1;
+if (renderer) initScene();
+setDark(state.dark, true);
+tNight.v = tNight.b;
+kick();
+</script>
